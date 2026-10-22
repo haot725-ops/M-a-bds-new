@@ -64,6 +64,24 @@ button{background:linear-gradient(180deg,var(--navy3),var(--navy2));color:#fff;b
 button:hover{filter:brightness(1.07)}
 button:active{transform:scale(.96)}
 /* ===== v4: app-feel ===== */
+/* ===== v6: bàn phím PIN riêng ===== */
+.pinh{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;border:0;padding:0;margin:0}
+.pstage{padding:8px 10px 6px;border-radius:18px;border:1.5px solid transparent;transition:background .2s,border-color .2s;margin:4px 0}
+.pstage.act{border-color:rgba(201,162,74,.55);background:var(--gold-soft)}
+.plabel{font-size:12px;font-weight:800;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.6px}
+.pdots{display:flex;justify-content:center;align-items:center;gap:14px;min-height:46px;margin:4px 0 0}
+.pdots i{width:16px;height:16px;border-radius:50%;border:2px solid #c3cde0;background:transparent;transition:all .22s var(--spring);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:20px;font-weight:800;color:var(--navy)}
+.pdots i.on{background:linear-gradient(135deg,#e0bd6a,var(--gold));border-color:var(--gold);transform:scale(1.1)}
+.pdots.show i{width:34px;height:42px;border-radius:12px;background:#fff;border-color:var(--line);transform:none}
+.pdots.show i.on{background:var(--gold-soft);border-color:var(--gold)}
+.pdots.shake{animation:shakeX .4s}
+@keyframes shakeX{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(4px)}}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 14px;max-width:300px;margin:12px auto 8px}
+.pk{height:62px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:26px;font-weight:700;color:var(--navy);box-shadow:var(--shadow);cursor:pointer;padding:0;transition:transform .12s var(--ease),background .15s}
+.pk:active{transform:scale(.9);background:var(--gold-soft)}
+.pk.fn{font-size:21px;background:#eef2fa;box-shadow:none}
+@media(max-height:760px){.pk{height:54px;font-size:23px}.pad{gap:8px 12px}}
+
 /* ===== v5: thanh chọn thay menu mặc định ===== */
 .psheet{padding:6px 0 calc(14px + env(safe-area-inset-bottom));max-height:80dvh;display:flex;flex-direction:column;overflow:hidden}
 .psheet .head{touch-action:none}
@@ -182,7 +200,7 @@ button.small{padding:7px 12px;font-size:12px;border-radius:10px;min-height:36px}
 .t-meta{font-size:12px;color:var(--muted)}
 a,.t-meta a{color:var(--navy3)}
 .t-meta a{font-weight:700;cursor:pointer;text-decoration:none}
-.lock{max-width:390px;margin:8vh auto;text-align:center;padding:26px 20px}
+.lock{max-width:390px;margin:3vh auto;text-align:center;padding:26px 20px}
 .lock .pin{font-size:26px;letter-spacing:10px;text-align:center;font-weight:800}
 .lock .msg{min-height:20px;font-size:13px;margin-top:10px;color:var(--red);font-weight:600}
 .lock .crest{width:64px;height:64px;border-radius:20px;margin:0 auto 12px;background:linear-gradient(145deg,var(--navy3),var(--navy));display:grid;place-items:center;box-shadow:0 10px 24px rgba(11,31,63,.3)}
@@ -294,10 +312,12 @@ nav.bottom .dot.gold{background:var(--gold);color:#2a1d00}
     <div class="crest" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
     <h2 id="loginTitle">Đăng nhập nội bộ</h2>
     <p class="sub" id="loginSub">Nhập mã PIN để mở hệ thống.</p>
-    <label for="pinInput" class="hidden" id="pinLabel">PIN</label>
-    <input id="pinInput" class="pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off" aria-label="Mã PIN">
-    <input id="pinInput2" class="pin hidden" type="password" inputmode="numeric" maxlength="6" placeholder="Nhập lại" autocomplete="off" aria-label="Nhập lại mã PIN" style="margin-top:10px">
+    <div id="stA" class="pstage act" data-st="A"><div class="plabel" id="lblA">Mã PIN</div><div class="pdots" id="dotsA"></div></div>
+    <div id="stB" class="pstage hidden" data-st="B"><div class="plabel">Nhập lại để xác nhận</div><div class="pdots" id="dotsB"></div></div>
+    <input id="pinInput" class="pinh" type="password" inputmode="none" readonly tabindex="-1" maxlength="6" autocomplete="off" aria-hidden="true">
+    <input id="pinInput2" class="pinh" type="password" inputmode="none" readonly tabindex="-1" maxlength="6" autocomplete="off" aria-hidden="true">
     <div class="msg" id="loginMsg" role="alert"></div>
+    <div class="pad" id="loginPad"></div>
     <div class="actions" style="justify-content:center">
       <button type="submit" id="loginBtn">Mở hệ thống</button>
       <button type="button" class="ghost" data-act="resetPin">Quên PIN</button>
@@ -1142,15 +1162,52 @@ function overdueCount(){const t=today();let n=0;db.projects.forEach(p=>{if(p.sta
 
 /* ============ Đăng nhập / khóa ============ */
 let lockTimer=null, idleTimer=null, hiddenAt=0;
+
+/* ===== bàn phím PIN riêng ===== */
+const padKeys=()=>['1','2','3','4','5','6','7','8','9','back','0','eye'].map(k=>k==='back'?'<button type="button" class="pk fn" data-k="back" aria-label="Xóa số cuối">⌫</button>':k==='eye'?'<button type="button" class="pk fn" data-k="eye" aria-label="Hiện hoặc ẩn số">👁</button>':`<button type="button" class="pk" data-k="${k}">${k}</button>`).join('');
+function drawDots(el,val,show){
+  el.classList.toggle('show',!!show);
+  const n=Math.min(6,Math.max(4,val.length));
+  el.innerHTML=Array.from({length:n},(_,k)=>`<i class="${k<val.length?'on':''}">${show&&k<val.length?val[k]:''}</i>`).join('');
+  el.setAttribute('role','img');el.setAttribute('aria-label','Đã nhập '+val.length+' số');
+}
+function shakeEl(el){el.classList.remove('shake');void el.offsetWidth;el.classList.add('shake')}
+let loginStage='A',pinShow=false;
+const loginInp=()=>$(loginStage==='A'?'pinInput':'pinInput2');
+function padSync(shake){
+  drawDots($('dotsA'),$('pinInput').value,pinShow);drawDots($('dotsB'),$('pinInput2').value,pinShow);
+  const first=!db.pinHash;
+  $('stA').classList.toggle('act',first?loginStage==='A':false);$('stB').classList.toggle('act',loginStage==='B');
+  $('loginBtn').textContent=first?(loginStage==='A'?'Tiếp tục':'Tạo PIN & mở'):'Mở hệ thống';
+  if(shake)shakeEl($(loginStage==='A'?'dotsA':'dotsB'));
+}
+function setStage(st){loginStage=st;padSync()}
+$('loginPad').innerHTML=padKeys();
+$('loginPad').addEventListener('click',e=>{
+  const b=e.target.closest('.pk');if(!b)return;
+  const k=b.dataset.k,inp=loginInp();
+  if(k==='back')inp.value=inp.value.slice(0,-1);
+  else if(k==='eye')pinShow=!pinShow;
+  else if(inp.value.length<6){inp.value+=k;if(!db.pinHash&&loginStage==='A'&&inp.value.length===6)setTimeout(()=>setStage('B'),180)}
+  const m=$('loginMsg');if(k!=='eye'&&!m.textContent.startsWith('Nhập sai nhiều'))m.textContent='';
+  padSync();
+});
+['stA','stB'].forEach(id=>$(id).addEventListener('click',()=>{if(!db.pinHash)setStage(id==='stA'?'A':'B')}));
+document.addEventListener('keydown',e=>{
+  if(view!=='login'||document.querySelector('.overlay')||e.ctrlKey||e.metaKey||e.altKey)return;
+  if(/^\d$/.test(e.key)){const b=document.querySelector('#loginPad [data-k="'+e.key+'"]');if(b)b.click();e.preventDefault()}
+  else if(e.key==='Backspace'){const b=document.querySelector('#loginPad [data-k="back"]');if(b)b.click();e.preventDefault()}
+  else if(e.key==='Enter'&&e.target.tagName!=='BUTTON'){e.preventDefault();$('loginForm').requestSubmit()}
+});
 function showLogin(){
   const first=!db.pinHash;
   $('loginTitle').textContent=first?'Tạo mã PIN':'Đăng nhập nội bộ';
   $('loginSub').textContent=first?'Chọn PIN 4–6 chữ số để bảo vệ dữ liệu, rồi nhập lại lần nữa.':'Nhập mã PIN để mở hệ thống.';
-  $('pinInput2').classList.toggle('hidden',!first);
-  $('loginBtn').textContent=first?'Tạo PIN & mở':'Mở hệ thống';
+  $('stB').classList.toggle('hidden',!first);
+  $('lblA').textContent=first?'PIN mới (4–6 số)':'Mã PIN';
   $('pinInput').value='';$('pinInput2').value='';$('loginMsg').textContent='';
+  pinShow=false;loginStage='A';padSync();
   go('login');updateLockMsg();
-  setTimeout(()=>{try{$('pinInput').focus()}catch(e){}},50);
 }
 function updateLockMsg(){
   clearInterval(lockTimer);
@@ -1167,14 +1224,15 @@ async function doLogin(e){
   const pin=$('pinInput').value.trim(),msg=$('loginMsg');
   if(!/^\d{4,6}$/.test(pin)){msg.textContent='PIN phải gồm 4–6 chữ số.';return}
   if(!db.pinHash){
-    if(pin!==$('pinInput2').value.trim()){msg.textContent='Hai lần nhập PIN chưa khớp.';return}
+    if(loginStage==='A'&&!$('pinInput2').value){setStage('B');msg.textContent='Nhập lại PIN để xác nhận.';return}
+    if(pin!==$('pinInput2').value.trim()){msg.textContent='Hai lần nhập PIN chưa khớp.';$('pinInput2').value='';padSync(1);return}
     db.salt=uid();db.pinHash=await hashPin(pin,db.salt);db.fails=0;db.lockUntil=0;save();
     toast('Đã tạo PIN. Hãy nhớ mã này.');unlock();return;
   }
   if(await hashPin(pin,db.salt)===db.pinHash){db.fails=0;db.lockUntil=0;save();unlock();return}
   db.fails++;
-  if(db.fails>=5){db.lockUntil=Date.now()+30000*Math.pow(2,Math.min(db.fails-5,5));save();$('pinInput').value='';updateLockMsg();return}
-  save();msg.textContent=`PIN không đúng. Còn ${5-db.fails} lần thử.`;$('pinInput').value='';
+  if(db.fails>=5){db.lockUntil=Date.now()+30000*Math.pow(2,Math.min(db.fails-5,5));save();$('pinInput').value='';padSync(1);updateLockMsg();return}
+  save();msg.textContent=`PIN không đúng. Còn ${5-db.fails} lần thử.`;$('pinInput').value='';padSync(1);
 }
 function unlock(){unlocked=true;resetIdle();cleanOrphans();go('projects');setTimeout(()=>checkMatches(),600)}
 function lock(){
@@ -1200,20 +1258,33 @@ async function wipeData(){
   clearURLs();db=newDb();save();
 }
 async function changePin(){
-  const o=overlay(`<form class="sheet" role="dialog" aria-modal="true"><h2>Đổi PIN</h2>
-    <label for="cp0">PIN hiện tại</label><input id="cp0" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
-    <label for="cp1">PIN mới (4–6 số)</label><input id="cp1" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
-    <label for="cp2">Nhập lại PIN mới</label><input id="cp2" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
-    <div class="err" id="cpErr" role="alert"></div>
-    <div class="actions"><button type="submit">Lưu PIN mới</button><button type="button" class="ghost" id="cpNo">Hủy</button></div></form>`);
-  o.querySelector('#cpNo').onclick=o.close;o.querySelector('#cp0').focus();
+  const LAB=['PIN hiện tại','PIN mới (4–6 số)','Nhập lại PIN mới'];let st=0,show=false;const vals=['','',''];
+  const o=overlay(`<form class="sheet" role="dialog" aria-modal="true" aria-label="Đổi PIN"><h2 style="margin-bottom:2px">Đổi PIN</h2>
+    <div class="plabel" id="cpLab"></div><div class="pdots" id="cpDots"></div>
+    <div class="err" id="cpErr" role="alert" style="text-align:center"></div>
+    <div class="pad" id="cpPad">${padKeys()}</div>
+    <div class="actions" style="justify-content:center"><button type="submit" id="cpGo">Tiếp tục</button><button type="button" class="ghost" id="cpNo">Hủy</button></div></form>`);
+  const err=o.querySelector('#cpErr');
+  const draw=sh=>{o.querySelector('#cpLab').textContent=`Bước ${st+1}/3 — ${LAB[st]}`;drawDots(o.querySelector('#cpDots'),vals[st],show);o.querySelector('#cpGo').textContent=st===2?'Lưu PIN mới':'Tiếp tục';if(sh)shakeEl(o.querySelector('#cpDots'))};
+  draw();
+  o.querySelector('#cpNo').onclick=o.close;
+  o.querySelector('#cpPad').addEventListener('click',e=>{
+    const b=e.target.closest('.pk');if(!b)return;const k=b.dataset.k;
+    if(k==='back')vals[st]=vals[st].slice(0,-1);else if(k==='eye')show=!show;else if(vals[st].length<6)vals[st]+=k;
+    if(k!=='eye')err.textContent='';draw();
+  });
   o.querySelector('form').onsubmit=async e=>{
-    e.preventDefault();const err=o.querySelector('#cpErr');
-    const a=o.querySelector('#cp0').value.trim(),b=o.querySelector('#cp1').value.trim(),c=o.querySelector('#cp2').value.trim();
-    if(await hashPin(a,db.salt)!==db.pinHash){err.textContent='PIN hiện tại không đúng.';return}
-    if(!/^\d{4,6}$/.test(b)){err.textContent='PIN mới phải gồm 4–6 chữ số.';return}
-    if(b!==c){err.textContent='Hai lần nhập PIN mới chưa khớp.';return}
-    db.salt=uid();db.pinHash=await hashPin(b,db.salt);save();o.close();toast('Đã đổi PIN.');
+    e.preventDefault();
+    if(st===0){
+      if(await hashPin(vals[0],db.salt)!==db.pinHash){err.textContent='PIN hiện tại không đúng.';vals[0]='';draw(1);return}
+      st=1;err.textContent='';draw();return;
+    }
+    if(st===1){
+      if(!/^\d{4,6}$/.test(vals[1])){err.textContent='PIN mới phải gồm 4–6 chữ số.';draw(1);return}
+      st=2;err.textContent='';draw();return;
+    }
+    if(vals[2]!==vals[1]){err.textContent='Hai lần nhập chưa khớp.';vals[2]='';draw(1);return}
+    db.salt=uid();db.pinHash=await hashPin(vals[1],db.salt);save();o.close();toast('Đã đổi PIN.');
   };
 }
 
